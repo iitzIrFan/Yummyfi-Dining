@@ -214,18 +214,10 @@ export const TrackOrderPage = () => {
             </div>
           </div>
 
-          <div className="border-t border-gray-100 pt-6 space-y-3">
-            <div className="flex justify-between text-gray-600">
-              <span>Subtotal</span>
-              <span>{formatPrice(order.totalAmount)}</span>
-            </div>
-            <div className="flex justify-between text-gray-600">
-              <span>GST (5%)</span>
-              <span>{formatPrice(order.totalAmount * 0.05)}</span>
-            </div>
-            <div className="flex justify-between text-2xl font-bold text-brand-maroon font-serif pt-4 border-t border-dashed border-gray-200 mt-4">
+          <div className="border-t border-gray-100 pt-6">
+            <div className="flex justify-between text-2xl font-bold text-brand-maroon font-serif">
               <span>Total Amount</span>
-              <span>{formatPrice(order.totalAmount * 1.05)}</span>
+              <span>{formatPrice(order.totalAmount)}</span>
             </div>
           </div>
         </div>
