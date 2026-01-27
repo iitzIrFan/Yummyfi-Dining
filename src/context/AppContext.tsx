@@ -9,6 +9,9 @@ interface AppContextType {
   tableNumber: string | null;
   customerName: string | null;
   isAdminAuthenticated: boolean;
+  toastVisible: boolean;
+  toastMessage: string;
+  toastProductName: string;
   setTableInfo: (num: string, name: string) => void;
   addToCart: (product: Product) => void;
   removeFromCart: (productId: string) => void;
@@ -19,6 +22,7 @@ interface AppContextType {
   addProduct: (product: Product) => void;
   deleteProduct: (id: string) => void;
   updateOrderStatus: (orderId: string, status: Order['status']) => void;
+  hideToast: () => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -38,6 +42,9 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [tableNumber, setTableNumber] = useState<string | null>(localStorage.getItem('tableNumber'));
   const [customerName, setCustomerName] = useState<string | null>(localStorage.getItem('customerName'));
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
+  const [toastVisible, setToastVisible] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const [toastProductName, setToastProductName] = useState('');
 
   useEffect(() => {
     localStorage.setItem('yummy-products', JSON.stringify(products));
@@ -67,6 +74,15 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       }
       return [...prev, { ...product, quantity: 1 }];
     });
+    
+    // Show toast notification
+    setToastMessage('Added to cart!');
+    setToastProductName(product.name);
+    setToastVisible(true);
+  };
+
+  const hideToast = () => {
+    setToastVisible(false);
   };
 
   const removeFromCart = (productId: string) => {
@@ -139,8 +155,10 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   return (
     <AppContext.Provider value={{
       products, cart, orders, tableNumber, customerName, isAdminAuthenticated,
+      toastVisible, toastMessage, toastProductName,
       setTableInfo, addToCart, removeFromCart, updateQuantity, placeOrder,
-      loginAdmin, logoutAdmin, addProduct, deleteProduct, updateOrderStatus
+      loginAdmin, logoutAdmin, addProduct, deleteProduct, updateOrderStatus,
+      hideToast
     }}>
       {children}
     </AppContext.Provider>
