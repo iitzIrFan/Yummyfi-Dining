@@ -113,17 +113,9 @@ export const CartPage = () => {
       <div className="bg-white rounded-2xl shadow-sm p-6 mb-24">
         <h3 className="font-bold text-gray-800 mb-4">Bill Details</h3>
         <div className="space-y-2 text-sm">
-          <div className="flex justify-between text-gray-600">
-            <span>Item Total</span>
+          <div className="border-t border-dashed border-gray-200 pt-4 flex justify-between font-bold text-lg text-brand-maroon">
+            <span>Total Amount</span>
             <span>{formatPrice(totalAmount)}</span>
-          </div>
-          <div className="flex justify-between text-gray-600">
-            <span>Taxes (5%)</span>
-            <span>{formatPrice(totalAmount * 0.05)}</span>
-          </div>
-          <div className="border-t border-dashed border-gray-200 my-4 pt-4 flex justify-between font-bold text-lg text-brand-maroon">
-            <span>To Pay</span>
-            <span>{formatPrice(totalAmount * 1.05)}</span>
           </div>
         </div>
       </div>
@@ -132,8 +124,8 @@ export const CartPage = () => {
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 p-4 shadow-lg z-40">
         <div className="max-w-3xl mx-auto flex items-center justify-between gap-4">
           <div className="flex flex-col">
-            <span className="text-xs text-gray-500">Total (incl. tax)</span>
-            <span className="text-xl font-bold text-brand-maroon">{formatPrice(totalAmount * 1.05)}</span>
+            <span className="text-xs text-gray-500">Total Amount</span>
+            <span className="text-xl font-bold text-brand-maroon">{formatPrice(totalAmount)}</span>
           </div>
           <button 
             onClick={handlePlaceOrderClick}
