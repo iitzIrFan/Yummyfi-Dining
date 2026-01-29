@@ -7,6 +7,13 @@ import { motion } from 'framer-motion';
 
 export const ProductCard = ({ product }: { product: Product }) => {
   const { addToCart } = useApp();
+  const [isAdding, setIsAdding] = React.useState(false);
+
+  const handleAddToCart = () => {
+    setIsAdding(true);
+    addToCart(product);
+    setTimeout(() => setIsAdding(false), 600);
+  };
 
   const discount = product.offerPrice 
     ? Math.round(((product.price - product.offerPrice) / product.price) * 100) 
@@ -68,13 +75,24 @@ export const ProductCard = ({ product }: { product: Product }) => {
              )}
           </div>
 
-          <button 
-            onClick={() => addToCart(product)}
-            className="w-full bg-brand-yellow hover:bg-brand-mustard text-brand-maroon font-bold py-3.5 rounded-xl flex items-center justify-center gap-2 text-base transition-all active:scale-[0.98] shadow-sm hover:shadow-md"
+          <motion.button 
+            onClick={handleAddToCart}
+            disabled={isAdding}
+            animate={isAdding ? { scale: [1, 0.95, 1.05, 1] } : {}}
+            transition={{ duration: 0.4 }}
+            className={cn(
+              "w-full bg-brand-yellow hover:bg-brand-mustard text-brand-maroon font-bold py-3.5 rounded-xl flex items-center justify-center gap-2 text-base transition-all active:scale-[0.98] shadow-sm hover:shadow-md",
+              isAdding && "bg-green-500 text-white"
+            )}
           >
-            <ShoppingCart size={18} strokeWidth={2.5} />
-            Add to Cart
-          </button>
+            <motion.div
+              animate={isAdding ? { rotate: [0, -10, 10, 0], scale: [1, 1.2, 1] } : {}}
+              transition={{ duration: 0.4 }}
+            >
+              <ShoppingCart size={18} strokeWidth={2.5} />
+            </motion.div>
+            {isAdding ? 'Added!' : 'Add to Cart'}
+          </motion.button>
         </div>
       </div>
     </motion.div>

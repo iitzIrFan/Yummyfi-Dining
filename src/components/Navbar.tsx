@@ -1,13 +1,24 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { ShoppingCart, UtensilsCrossed, ChefHat } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { cn } from '../utils/helpers';
+import { motion } from 'framer-motion';
 
 export const Navbar = () => {
   const { cart, tableNumber } = useApp();
   const location = useLocation();
   const isAdmin = location.pathname.startsWith('/admin');
+  const [cartBounce, setCartBounce] = useState(false);
+  const prevCartLength = React.useRef(cart.length);
+
+  useEffect(() => {
+    if (cart.length > prevCartLength.current) {
+      setCartBounce(true);
+      setTimeout(() => setCartBounce(false), 500);
+    }
+    prevCartLength.current = cart.length;
+  }, [cart.length]);
 
   // Don't show the main navbar on Admin Dashboard as it has its own sidebar
   if (isAdmin && location.pathname.includes('dashboard')) return null;
@@ -48,11 +59,23 @@ export const Navbar = () => {
           
           {!isAdmin && (
             <Link to="/cart" className="relative p-2 text-gray-800 hover:text-brand-maroon transition-colors">
-              <ShoppingCart size={26} strokeWidth={2} />
+              <motion.div
+                animate={cartBounce ? {
+                  scale: [1, 1.3, 0.9, 1.1, 1],
+                  rotate: [0, -10, 10, -5, 0]
+                } : {}}
+                transition={{ duration: 0.5 }}
+              >
+                <ShoppingCart size={26} strokeWidth={2} />
+              </motion.div>
               {cart.length > 0 && (
-                <span className="absolute -top-1 -right-1 bg-brand-maroon text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full border-2 border-brand-cream">
+                <motion.span 
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  className="absolute -top-1 -right-1 bg-brand-maroon text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full border-2 border-brand-cream"
+                >
                   {cart.length}
-                </span>
+                </motion.span>
               )}
             </Link>
           )}
