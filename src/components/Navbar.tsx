@@ -1,14 +1,16 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ShoppingCart, Menu, X, LogOut, ChevronDown } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { cn } from '../utils/helpers';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export const Navbar = () => {
   const { cart, tableNumber } = useApp();
   const { user, isAdmin, signOut } = useAuth();
+  const { showConfirm, showError } = useToast();
   const location = useLocation();
   const navigate = useNavigate();
   const isAdminRoute = location.pathname.startsWith('/admin');
@@ -16,6 +18,7 @@ export const Navbar = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const prevCartLength = React.useRef(cart.length);
+  const userMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (cart.length > prevCartLength.current) {
@@ -31,6 +34,20 @@ export const Navbar = () => {
     setIsUserMenuOpen(false);
   }, [location.pathname]);
 
+  // Close user menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+        setIsUserMenuOpen(false);
+      }
+    };
+
+    if (isUserMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [isUserMenuOpen]);
+
   // Handle sign out
   const handleSignOut = async () => {
     const isAdminSession = localStorage.getItem('isAdminSession') === 'true';
@@ -38,23 +55,30 @@ export const Navbar = () => {
       ? 'Are you sure you want to sign out from admin session?'
       : 'Are you sure you want to sign out? Your cart will be cleared.';
 
-    if (window.confirm(confirmMessage)) {
-      try {
-        await signOut(false); // Sign out completely (not admin-only)
-        setIsUserMenuOpen(false);
+    showConfirm(
+      confirmMessage,
+      async () => {
+        try {
+          await signOut(false); // Sign out completely (not admin-only)
+          setIsUserMenuOpen(false);
 
-        // If was admin session, redirect to admin login
-        if (isAdminSession) {
-          navigate('/admin');
-        } else {
-          // Regular user, just refresh the page
-          window.location.reload();
+          // If was admin session, redirect to admin login
+          if (isAdminSession) {
+            navigate('/admin');
+          } else {
+            // Regular user, just refresh the page
+            window.location.reload();
+          }
+        } catch (error) {
+          console.error('Sign-out failed:', error);
+          showError('Sign-out failed. Please try again.');
         }
-      } catch (error) {
-        console.error('Sign-out failed:', error);
-        alert('Sign-out failed. Please try again.');
-      }
-    }
+      },
+      undefined,
+      'Sign Out',
+      'Cancel',
+      '🚪 Sign Out Confirmation'
+    );
   };
 
   // Don't show the main navbar on Admin Dashboard as it has its own sidebar
@@ -63,7 +87,7 @@ export const Navbar = () => {
   return (
     <>
       <nav className={cn(
-        "sticky top-0 z-50 shadow-sm px-4 sm:px-6 py-4 transition-colors bg-brand-cream"
+        "sticky top-0 z-50 shadow-sm px-4 sm:px-6 py-4 transition-colors bg-brand-yellow"
       )}>
         <div className="max-w-7xl mx-auto flex justify-between items-center">
           {/* Logo Section */}
@@ -81,9 +105,9 @@ export const Navbar = () => {
             </div>
           </Link>
 
-          {/* Center Navigation (Desktop Only) */}
+          {/* Center Navigation (Tablet & Desktop) */}
           {!isAdminRoute && (
-            <div className="hidden md:flex items-center gap-8">
+            <div className="hidden sm:flex items-center gap-8">
               <Link to="/" className="text-brand-maroon font-bold hover:text-brand-burgundy transition-colors">Menu</Link>
               <Link to="/track-order" className="text-gray-600 font-medium hover:text-brand-maroon transition-colors">Track Order</Link>
             </div>
@@ -97,9 +121,9 @@ export const Navbar = () => {
               </span>
             )}
 
-            {/* Desktop Cart */}
+            {/* Tablet & Desktop Cart */}
             {!isAdminRoute && (
-              <Link to="/cart" className="relative p-2 text-gray-800 hover:text-brand-maroon transition-colors hidden md:block">
+              <Link to="/cart" className="relative p-2 text-gray-800 hover:text-brand-maroon transition-colors hidden sm:block">
                 <motion.div
                   animate={cartBounce ? {
                     scale: [1, 1.3, 0.9, 1.1, 1],
@@ -121,9 +145,9 @@ export const Navbar = () => {
               </Link>
             )}
 
-            {/* Mobile Cart & Menu Toggle */}
+            {/* Mobile Only - Hamburger Menu */}
             {!isAdminRoute && (
-              <div className="flex items-center gap-4 md:hidden">
+              <div className="flex items-center gap-4 sm:hidden">
                 <Link to="/cart" className="relative text-gray-800">
                   <ShoppingCart size={24} strokeWidth={2} />
                   {cart.length > 0 && (
@@ -143,9 +167,9 @@ export const Navbar = () => {
 
 
 
-            {/* User Profile Dropdown (Desktop) */}
+            {/* User Profile Dropdown (Tablet & Desktop) */}
             {!isAdminRoute && user && (
-              <div className="relative hidden md:block">
+              <div ref={userMenuRef} className="relative hidden sm:block">
                 <button
                   onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
                   className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-white transition-colors border border-transparent hover:border-brand-maroon/20"
@@ -153,16 +177,16 @@ export const Navbar = () => {
                   <div className="w-8 h-8 rounded-full bg-brand-maroon text-white flex items-center justify-center text-sm font-bold">
                     {user.displayName?.charAt(0) || user.email?.charAt(0) || 'U'}
                   </div>
-                  <div className="hidden lg:block text-left">
-                    <p className="text-xs font-bold text-gray-700 leading-none">
+                  <div className="text-left">
+                    <p className="text-xs font-bold text-black leading-none">
                       {user.displayName || 'User'}
                     </p>
-                    <p className="text-[10px] text-gray-400 leading-none mt-0.5">
+                    <p className="text-[10px] text-black leading-none mt-0.5">
                       {isAdmin ? 'Admin' : 'Customer'}
                     </p>
                   </div>
                   <ChevronDown size={16} className={cn(
-                    "text-gray-400 transition-transform",
+                    "text-black transition-transform",
                     isUserMenuOpen && "rotate-180"
                   )} />
                 </button>

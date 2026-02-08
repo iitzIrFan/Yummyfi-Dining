@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
+import { useToast } from '../../context/ToastContext';
 import { Product, CATEGORIES, Order } from '../../types';
 import { fileToBase64, formatPrice, cn } from '../../utils/helpers';
 import {
@@ -175,7 +176,7 @@ const DashboardOrderCard = ({ order, onUpdateStatus }: { order: Order, onUpdateS
               </span>
               <span className="text-gray-700 font-medium">{item.name}</span>
             </div>
-            <span className="font-bold text-gray-900">{formatPrice((item.offerPrice || item.price) * item.quantity)}</span>
+            <span className="font-bold text-gray-900">{formatPrice(item.price * item.quantity)}</span>
           </div>
         ))}
       </div>
@@ -302,7 +303,7 @@ const OrderManagementCard = ({ order, onUpdateStatus }: { order: Order, onUpdate
                       </span>
                       <span className="text-gray-700 font-medium">{item.name}</span>
                     </div>
-                    <span className="font-bold text-gray-900">{formatPrice((item.offerPrice || item.price) * item.quantity)}</span>
+                    <span className="font-bold text-gray-900">{formatPrice(item.price * item.quantity)}</span>
                   </div>
                 ))}
               </div>
@@ -369,11 +370,54 @@ const OrderManagementCard = ({ order, onUpdateStatus }: { order: Order, onUpdate
 // --- MAIN DASHBOARD COMPONENT ---
 
 export const AdminDashboard = () => {
-  const { orders, ordersLoading, products, productsLoading, addProduct, deleteProduct, updateOrderStatus } = useApp();
+  const { orders, ordersLoading, products, productsLoading, addProduct, deleteProduct, updateOrderStatus, deleteOrder } = useApp();
   const { signOut, user } = useAuth();
+  const { showConfirm, showSuccess, showError, showWarning } = useToast();
   const [activeView, setActiveView] = useState<'dashboard' | 'orders' | 'products'>('dashboard');
   const [orderFilter, setOrderFilter] = useState<'all' | 'pending' | 'confirmed' | 'ready' | 'completed'>('all');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  // --- BUSINESS DAY LOGIC (4 AM to 4 AM) ---
+  const getBusinessDayStart = () => {
+    const now = new Date();
+    // If current time is before 4 AM, the business day started yesterday at 4 AM
+    // If current time is 4 AM or later, the business day started today at 4 AM
+    const start = new Date(now);
+    if (now.getHours() < 4) {
+      start.setDate(start.getDate() - 1);
+    }
+    start.setHours(4, 0, 0, 0);
+    return start;
+  };
+
+  const businessDayStart = getBusinessDayStart();
+
+  // Filter orders for the current business day (for display)
+  const todaysOrders = orders.filter(o => new Date(o.createdAt) >= businessDayStart);
+
+  // Auto-delete expired orders from previous business days
+  useEffect(() => {
+    if (ordersLoading) return;
+
+    const cleanupExpiredOrders = async () => {
+      const expiredOrders = orders.filter(o => new Date(o.createdAt) < businessDayStart);
+
+      if (expiredOrders.length > 0) {
+        console.log(`🧹 Cleaning up ${expiredOrders.length} expired orders from previous business day...`);
+        // Process deletions sequentially to avoid overwhelming Firestore
+        for (const order of expiredOrders) {
+          try {
+            await deleteOrder(order.id);
+          } catch (err) {
+            console.error(`Failed to delete expired order ${order.id}`, err);
+          }
+        }
+        console.log('✅ Daily cleanup complete.');
+      }
+    };
+
+    cleanupExpiredOrders();
+  }, [orders, ordersLoading]); // Dependencies ensure it runs when orders load/change
 
   // Product Form State
   const [showProductForm, setShowProductForm] = useState(false);
@@ -387,25 +431,32 @@ export const AdminDashboard = () => {
   const [isUploading, setIsUploading] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
 
-  const pendingOrders = orders.filter(o => o.status === 'pending');
-  const confirmedOrders = orders.filter(o => o.status === 'confirmed');
-  const readyOrders = orders.filter(o => o.status === 'ready');
-  const completedOrders = orders.filter(o => o.status === 'completed');
+  // Use todaysOrders for all stats and lists
+  const pendingOrders = todaysOrders.filter(o => o.status === 'pending');
+  const confirmedOrders = todaysOrders.filter(o => o.status === 'confirmed');
+  const readyOrders = todaysOrders.filter(o => o.status === 'ready');
+  const completedOrders = todaysOrders.filter(o => o.status === 'completed');
   const totalRevenue = completedOrders.reduce((sum, o) => sum + o.totalAmount, 0);
 
   // Handle sign out
   const handleSignOut = async () => {
-    const confirmLogout = window.confirm('Are you sure you want to sign out from admin panel?');
-    if (confirmLogout) {
-      try {
-        // Use adminOnly=true to only sign out admin sessions
-        await signOut(true);
-        window.location.href = '/admin'; // Redirect to admin login
-      } catch (error) {
-        console.error('Sign-out failed:', error);
-        alert('Sign-out failed. Please try again.');
-      }
-    }
+    showConfirm(
+      'Are you sure you want to sign out from admin panel?',
+      async () => {
+        try {
+          // Use adminOnly=true to only sign out admin sessions
+          await signOut(true);
+          window.location.href = '/admin'; // Redirect to admin login
+        } catch (error) {
+          console.error('Sign-out failed:', error);
+          showError('Sign-out failed. Please try again.');
+        }
+      },
+      undefined,
+      'Sign Out',
+      'Cancel',
+      '🚪 Admin Sign Out'
+    );
   };
 
   // Image compression utility
@@ -470,7 +521,10 @@ export const AdminDashboard = () => {
       const base64 = await fileToBase64(file);
       setImagePreview(base64);
       setImageFile(file);
-    } catch (err) { console.error(err); alert("Failed to process image"); }
+    } catch (err) {
+      console.error(err);
+      showError("Failed to process image");
+    }
     finally { setIsUploading(false); }
   };
 
@@ -479,15 +533,18 @@ export const AdminDashboard = () => {
 
     // Validate based on upload method
     if (!newProduct.name || !newProduct.price) {
-      alert("Please fill name and price."); return;
+      showWarning("Please fill in both name and price.", "⚠️ Validation Error");
+      return;
     }
 
     if (uploadMethod === 'url' && !imageUrl) {
-      alert("Please enter an image URL."); return;
+      showWarning("Please enter an image URL.", "⚠️ Validation Error");
+      return;
     }
 
     if (uploadMethod === 'file' && !imageFile) {
-      alert("Please select an image file."); return;
+      showWarning("Please select an image file.", "⚠️ Validation Error");
+      return;
     }
 
     setIsUploading(true);
@@ -509,9 +566,12 @@ export const AdminDashboard = () => {
           console.error('❌ ImageKit upload failed:', imagekitError);
 
           // Fallback to compressed base64 if ImageKit fails
-          if (imagekitError.message?.includes('ImageKit configuration missing') || 
-              imagekitError.message?.includes('unsigned uploads')) {
-            alert('⚠️ ImageKit not configured properly.\n\n' + imagekitError.message + '\n\nUsing compressed image fallback for now.');
+          if (imagekitError.message?.includes('ImageKit configuration missing') ||
+            imagekitError.message?.includes('unsigned uploads')) {
+            showWarning(
+              'ImageKit not configured properly. Using compressed image fallback for now.\n\n' + imagekitError.message,
+              '⚠️ ImageKit Warning'
+            );
             console.log('📦 Falling back to compressed base64...');
             finalImageUrl = await compressImageToBase64(imageFile!);
           } else {
@@ -528,13 +588,14 @@ export const AdminDashboard = () => {
         category: newProduct.category as string,
         imageUrl: finalImageUrl,
         isVeg: newProduct.isVeg || false,
+        imageFocus: newProduct.imageFocus || 50, // Save the focus value
       };
 
       await addProduct(product);
-      alert('✅ Product added successfully!');
+      showSuccess('Product added successfully!', '✅ Success');
 
       setShowProductForm(false);
-      setNewProduct({ name: '', price: 0, category: 'Main Course', description: '', isVeg: true });
+      setNewProduct({ name: '', price: 0, category: 'Main Course', description: '', isVeg: true, imageFocus: 50 });
       setImagePreview(null);
       setImageFile(null);
       setImageUrl('');
@@ -542,14 +603,17 @@ export const AdminDashboard = () => {
       console.error('❌ Error adding product:', error);
 
       if (error.message?.includes('longer than')) {
-        alert('❌ Image too large! Please:\n' +
+        showError(
+          'Image too large! Please:\n' +
           '1. Use a smaller image, OR\n' +
           '2. Use "Image URL" method and paste a link from:\n' +
           '   • Google Drive\n' +
           '   • Imgur (https://imgur.com)\n' +
-          '   • Any image hosting service');
+          '   • Any image hosting service',
+          '❌ Image Size Error'
+        );
       } else {
-        alert(`❌ Error: ${error.message}`);
+        showError(`Error: ${error.message}`, '❌ Error');
       }
     } finally {
       setIsUploading(false);
@@ -1044,6 +1108,40 @@ export const AdminDashboard = () => {
                       )}
                     </div>
                   </div>
+                  {/* Image Focus Slider */}
+                  {imagePreview && (
+                    <div className="mt-3 bg-gray-50 p-3 rounded-xl border border-gray-100">
+                      <div className="flex justify-between items-center mb-2">
+                        <label className="text-xs font-bold text-gray-700">Image Vertical Focus</label>
+                        <span className="text-[10px] font-mono bg-white px-2 py-0.5 rounded border text-gray-500">
+                          {newProduct.imageFocus || 50}%
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        value={newProduct.imageFocus || 50}
+                        onChange={(e) => setNewProduct({ ...newProduct, imageFocus: Number(e.target.value) })}
+                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-brand-maroon"
+                      />
+                      <p className="text-[10px] text-gray-400 mt-1 text-center">
+                        Adjust to align the food in the center (0% = Top, 100% = Bottom)
+                      </p>
+                      {/* Live Focus Preview */}
+                      <div className="mt-2 text-center">
+                        <p className="text-[10px] text-gray-400 mb-1">Card Preview</p>
+                        <div className="w-32 h-20 mx-auto rounded-lg overflow-hidden border border-gray-200 relative shadow-sm">
+                          <img
+                            src={imagePreview}
+                            className="w-full h-full object-cover"
+                            style={{ objectPosition: `center ${newProduct.imageFocus || 50}%` }}
+                            alt="Focus Preview"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1067,6 +1165,40 @@ export const AdminDashboard = () => {
                   {imagePreview && uploadMethod === 'url' && (
                     <div className="mt-3">
                       <img src={imagePreview} alt="Preview" className="mx-auto h-48 object-contain rounded-lg shadow-sm border border-gray-200" />
+                    </div>
+                  )}
+                  {/* Image Focus Slider for URL Method */}
+                  {imagePreview && uploadMethod === 'url' && (
+                    <div className="mt-3 bg-gray-50 p-3 rounded-xl border border-gray-100">
+                      <div className="flex justify-between items-center mb-2">
+                        <label className="text-xs font-bold text-gray-700">Image Vertical Focus</label>
+                        <span className="text-[10px] font-mono bg-white px-2 py-0.5 rounded border text-gray-500">
+                          {newProduct.imageFocus || 50}%
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        value={newProduct.imageFocus || 50}
+                        onChange={(e) => setNewProduct({ ...newProduct, imageFocus: Number(e.target.value) })}
+                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-brand-maroon"
+                      />
+                      <p className="text-[10px] text-gray-400 mt-1 text-center">
+                        Adjust to align the food in the center (0% = Top, 100% = Bottom)
+                      </p>
+                      {/* Live Focus Preview */}
+                      <div className="mt-2 text-center">
+                        <p className="text-[10px] text-gray-400 mb-1">Card Preview</p>
+                        <div className="w-32 h-20 mx-auto rounded-lg overflow-hidden border border-gray-200 relative shadow-sm">
+                          <img
+                            src={imagePreview}
+                            className="w-full h-full object-cover"
+                            style={{ objectPosition: `center ${newProduct.imageFocus || 50}%` }}
+                            alt="Focus Preview"
+                          />
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>

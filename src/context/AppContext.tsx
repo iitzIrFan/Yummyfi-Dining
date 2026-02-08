@@ -3,6 +3,7 @@ import { Product, CartItem, Order } from '../types';
 import { INITIAL_PRODUCTS } from '../data/mockData';
 import { collection, onSnapshot, addDoc, deleteDoc, doc, updateDoc, query, orderBy } from 'firebase/firestore';
 import { db } from '../firebase';
+import { useToast } from './ToastContext';
 
 interface AppContextType {
   products: Product[];
@@ -12,18 +13,15 @@ interface AppContextType {
   ordersLoading: boolean;
   tableNumber: string | null;
   customerName: string | null;
-  toastVisible: boolean;
-  toastMessage: string;
-  toastProductName: string;
   setTableInfo: (num: string, name: string) => void;
   addToCart: (product: Product) => void;
   removeFromCart: (productId: string) => void;
   updateQuantity: (productId: string, delta: number) => void;
-  placeOrder: () => Promise<string | null>;
+  placeOrder: (orderTableNumber?: string, orderCustomerName?: string) => Promise<string | null>;
   addProduct: (product: Omit<Product, 'id'>) => Promise<void>;
   deleteProduct: (id: string) => void;
   updateOrderStatus: (orderId: string, status: Order['status']) => Promise<void>;
-  hideToast: () => void;
+  deleteOrder: (orderId: string) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -38,9 +36,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
   const [tableNumber, setTableNumber] = useState<string | null>(localStorage.getItem('tableNumber'));
   const [customerName, setCustomerName] = useState<string | null>(null);
-  const [toastVisible, setToastVisible] = useState(false);
-  const [toastMessage, setToastMessage] = useState('');
-  const [toastProductName, setToastProductName] = useState('');
+
+  const { showSuccess } = useToast();
 
   // Subscribe to Firestore products
   useEffect(() => {
@@ -120,14 +117,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       return [...prev, { ...product, quantity: 1 }];
     });
 
-    // Show toast notification
-    setToastMessage('Added to cart!');
-    setToastProductName(product.name);
-    setToastVisible(true);
-  };
-
-  const hideToast = () => {
-    setToastVisible(false);
+    // Show success toast notification with brand styling
+    showSuccess(`${product.name} added to cart!`, '🛒 Added to Cart');
   };
 
   const removeFromCart = (productId: string) => {
@@ -144,14 +135,18 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     }));
   };
 
-  const placeOrder = async () => {
-    if (!tableNumber || cart.length === 0) return null;
+  const placeOrder = async (orderTableNumber?: string, orderCustomerName?: string) => {
+    // Use arguments if provided, otherwise fall back to state
+    const finalTableNumber = orderTableNumber || tableNumber;
+    const finalCustomerName = orderCustomerName || customerName;
+
+    if (!finalTableNumber || cart.length === 0) return null;
 
     const newOrder: Omit<Order, 'id'> = {
-      tableNumber,
-      customerName: customerName || 'Guest',
+      tableNumber: finalTableNumber,
+      customerName: finalCustomerName || 'Guest',
       items: [...cart],
-      totalAmount: cart.reduce((sum, item) => sum + (item.offerPrice || item.price) * item.quantity, 0),
+      totalAmount: cart.reduce((sum, item) => sum + item.price * item.quantity, 0),
       status: 'pending',
       createdAt: new Date().toISOString(),
     };
@@ -191,13 +186,21 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     await updateDoc(doc(db, 'orders', orderId), updates as any);
   };
 
+  const deleteOrder = async (orderId: string) => {
+    try {
+      await deleteDoc(doc(db, 'orders', orderId));
+      console.log(`🗑️ Order ${orderId} deleted successfully`);
+    } catch (error) {
+      console.error(`❌ Error deleting order ${orderId}:`, error);
+      throw error;
+    }
+  };
+
   return (
     <AppContext.Provider value={{
       products, productsLoading, cart, orders, ordersLoading, tableNumber, customerName,
-      toastVisible, toastMessage, toastProductName,
       setTableInfo, addToCart, removeFromCart, updateQuantity, placeOrder,
-      addProduct, deleteProduct, updateOrderStatus,
-      hideToast
+      addProduct, deleteProduct, updateOrderStatus, deleteOrder
     }}>
       {children}
     </AppContext.Provider>

@@ -1,8 +1,9 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { AppProvider, useApp } from './context/AppContext';
+import { AppProvider } from './context/AppContext';
+import { ToastProvider } from './context/ToastContext';
+import { ToastContainer } from './components/Toast';
 import { Navbar } from './components/Navbar';
-import { Toast } from './components/Toast';
 import { UserMenu } from './pages/UserMenu';
 import { CartPage } from './pages/CartPage';
 import { TrackOrderPage } from './pages/TrackOrderPage';
@@ -27,23 +28,16 @@ const ProtectedAdminRoute = ({ children }: { children: React.ReactNode }) => {
 };
 
 function AppContent() {
-  const { toastVisible, toastMessage, toastProductName, hideToast } = useApp();
-  
   return (
     <div className="min-h-screen bg-brand-offWhite font-sans text-gray-900">
       <Navbar />
-      <Toast 
-        message={toastMessage}
-        productName={toastProductName}
-        isVisible={toastVisible}
-        onClose={hideToast}
-      />
+      <ToastContainer />
       <Routes>
         {/* User Routes */}
         <Route path="/" element={<UserMenu />} />
         <Route path="/cart" element={<CartPage />} />
         <Route path="/track-order" element={<TrackOrderPage />} />
-        
+
         {/* Admin Routes */}
         <Route path="/admin" element={<AdminLogin />} />
         <Route path="/admin/dashboard" element={
@@ -58,11 +52,13 @@ function AppContent() {
 
 function App() {
   return (
-    <AppProvider>
-      <BrowserRouter>
-        <AppContent />
-      </BrowserRouter>
-    </AppProvider>
+    <ToastProvider>
+      <AppProvider>
+        <BrowserRouter>
+          <AppContent />
+        </BrowserRouter>
+      </AppProvider>
+    </ToastProvider>
   );
 }
 
