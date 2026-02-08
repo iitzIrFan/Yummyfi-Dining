@@ -2,6 +2,7 @@ import React from 'react';
 import { Product } from '../types';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { formatPrice, cn } from '../utils/helpers';
 import { ShoppingCart } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -9,28 +10,32 @@ import { motion } from 'framer-motion';
 export const ProductCard = ({ product }: { product: Product }) => {
   const { addToCart } = useApp();
   const { user, signInWithGoogle } = useAuth();
+  const { showConfirm, showError } = useToast();
   const [isAdding, setIsAdding] = React.useState(false);
 
   const handleAddToCart = async () => {
     // Check if user is authenticated
     if (!user) {
-      const confirmSignIn = window.confirm(
-        'Please sign in with your Google account to add items to cart. This helps us track your delivery later.\n\nClick OK to sign in with Google.'
+      showConfirm(
+        'Please sign in with your Google account to add items to cart. This helps us track your delivery later.',
+        async () => {
+          try {
+            // Pass forAdmin=false to indicate this is a regular user login
+            await signInWithGoogle(false);
+            // After successful sign-in, add to cart
+            setIsAdding(true);
+            addToCart(product);
+            setTimeout(() => setIsAdding(false), 600);
+          } catch (error) {
+            console.error('Sign-in failed:', error);
+            showError('Sign-in failed. Please try again.');
+          }
+        },
+        undefined,
+        'Sign In',
+        'Cancel',
+        '🔐 Authentication Required'
       );
-
-      if (confirmSignIn) {
-        try {
-          // Pass forAdmin=false to indicate this is a regular user login
-          await signInWithGoogle(false);
-          // After successful sign-in, add to cart
-          setIsAdding(true);
-          addToCart(product);
-          setTimeout(() => setIsAdding(false), 600);
-        } catch (error) {
-          console.error('Sign-in failed:', error);
-          alert('Sign-in failed. Please try again.');
-        }
-      }
       return;
     }
 
@@ -40,8 +45,16 @@ export const ProductCard = ({ product }: { product: Product }) => {
     setTimeout(() => setIsAdding(false), 600);
   };
 
-  const discount = product.offerPrice
-    ? Math.round(((product.price - product.offerPrice) / product.price) * 100)
+  // Logic based on User Audio:
+  // product.price = Selling Price (e.g. 10)
+  // product.offerPrice = Discount Amount (e.g. 2)
+  // Original Price = Selling + Discount (10 + 2 = 12)
+  const sellingPrice = product.price;
+  const discountAmount = product.offerPrice || 0;
+  const originalPrice = sellingPrice + discountAmount;
+
+  const discount = discountAmount > 0
+    ? Math.round((discountAmount / originalPrice) * 100)
     : 0;
 
   return (
@@ -50,29 +63,29 @@ export const ProductCard = ({ product }: { product: Product }) => {
       animate={{ opacity: 1, y: 0 }}
       className="bg-white rounded-3xl shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden group flex flex-col h-full border border-transparent hover:border-brand-goldGlow/30"
     >
-      <div className="relative h-36 sm:h-56 overflow-hidden p-2 sm:p-3 pb-0">
+      <div className="relative h-44 sm:h-48 md:h-56 overflow-hidden p-2 sm:p-3 pb-0">
         <img
           src={product.imageUrl}
           alt={product.name}
           className="w-full h-full object-cover rounded-2xl group-hover:scale-105 transition-transform duration-500 shadow-inner"
+          style={{ objectPosition: `center ${product.imageFocus || 50}%` }}
         />
 
         {/* Veg/Non-Veg Indicator */}
-        <div className="absolute top-3 left-3 sm:top-5 sm:left-5 bg-white p-[2px] rounded-md shadow-sm z-10">
+        <div className={cn(
+          "absolute top-3 sm:top-4 left-3 sm:left-4 w-5 h-5 sm:w-6 sm:h-6 border-2 flex items-center justify-center z-10 rounded-sm  bg-white shadow-sm",
+          product.isVeg ? "border-green-600" : "border-red-600"
+        )}>
           <div className={cn(
-            "w-4 h-4 sm:w-5 sm:h-5 border-2 flex items-center justify-center rounded-[4px]",
-            product.isVeg ? "border-green-600" : "border-red-600"
-          )}>
-            <div className={cn(
-              "w-2 sm:w-2.5 h-2 sm:h-2.5 rounded-full",
-              product.isVeg ? "bg-green-600" : "bg-red-600"
-            )} />
-          </div>
+            "w-2 sm:w-2.5 h-2 sm:h-2.5 rounded-full",
+            product.isVeg ? "bg-green-600" : "bg-red-600"
+          )} />
         </div>
 
-        {/* Discount Badge */}
+        {/* Discount Badge - Only if offer exists */}
+        {/* Discount Badge - Only if offer exists */}
         {discount > 0 && (
-          <div className="absolute top-3 right-3 sm:top-5 sm:right-5 bg-brand-yellow text-brand-maroon text-[10px] sm:text-xs font-bold px-2 py-1 sm:px-3 sm:py-1.5 rounded-full shadow-md z-10">
+          <div className="absolute top-3 sm:top-4 right-3 sm:right-4 bg-brand-yellow text-brand-maroon text-[9px] sm:text-xs font-bold px-1.5 py-0.5 sm:px-2 sm:py-1 rounded-md shadow-md z-10">
             {discount}% OFF
           </div>
         )}
@@ -89,14 +102,14 @@ export const ProductCard = ({ product }: { product: Product }) => {
         </div>
 
         <div className="mt-2 sm:mt-4 space-y-2 sm:space-y-4">
-          <div className="flex items-center gap-3">
-            {product.offerPrice ? (
+          <div className="flex items-center gap-2">
+            {discountAmount > 0 ? (
               <>
-                <span className="text-2xl font-bold text-brand-maroon">{formatPrice(product.offerPrice)}</span>
-                <span className="text-sm text-gray-400 line-through decoration-gray-400 decoration-2">{formatPrice(product.price)}</span>
+                <span className="text-lg sm:text-2xl font-bold text-brand-maroon">{formatPrice(sellingPrice)}</span>
+                <span className="text-xs sm:text-sm text-gray-400 line-through decoration-gray-400">{formatPrice(originalPrice)}</span>
               </>
             ) : (
-              <span className="text-lg sm:text-2xl font-bold text-brand-maroon">{formatPrice(product.price)}</span>
+              <span className="text-lg sm:text-2xl font-bold text-brand-maroon">{formatPrice(sellingPrice)}</span>
             )}
           </div>
 

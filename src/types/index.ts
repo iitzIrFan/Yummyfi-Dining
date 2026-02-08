@@ -6,6 +6,7 @@ export interface Product {
   description: string;
   category: string;
   imageUrl: string; // Base64 or URL
+  imageFocus?: number; // Vertical object-position (0-100)
   isVeg: boolean;
 }
 

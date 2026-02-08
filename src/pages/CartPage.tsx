@@ -2,11 +2,11 @@ import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { formatPrice } from '../utils/helpers';
-import { Minus, Plus, Trash2, ArrowLeft, CheckCircle, ShoppingCart, User, MapPin, X } from 'lucide-react';
+import { Minus, Plus, Trash2, ArrowLeft, CheckCircle, ShoppingCart, MapPin, X } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 
 export const CartPage = () => {
-  const { cart, updateQuantity, removeFromCart, placeOrder, tableNumber, customerName, setTableInfo } = useApp();
+  const { cart, updateQuantity, removeFromCart, placeOrder, tableNumber, setTableInfo } = useApp();
   const { user, signInWithGoogle } = useAuth();
   const navigate = useNavigate();
   const [showTableModal, setShowTableModal] = useState(false);
@@ -15,26 +15,58 @@ export const CartPage = () => {
 
   // Local state for the modal inputs
   const [tempTable, setTempTable] = useState(tableNumber || '');
-  const [tempName, setTempName] = useState(customerName || '');
+  const [orderLoading, setOrderLoading] = useState(false);
 
 
 
-  const totalAmount = cart.reduce((sum, item) => sum + (item.offerPrice || item.price) * item.quantity, 0);
+  const totalAmount = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
   const handlePlaceOrderClick = () => {
     // Always show modal to confirm details before placing order
     setTempTable(tableNumber || '');
-    setTempName(customerName || '');
     setShowTableModal(true);
+  };
+
+  // Helper function to extract a clean name from email
+  //  e.g., "piyushthawale19@gmail.com" -> "Piyush Thawale"
+  const getNameFromEmail = (email: string): string => {
+    // Get the part before @
+    const localPart = email.split('@')[0];
+    // Remove numbers
+    const withoutNumbers = localPart.replace(/\d/g, '');
+    // Split by common separators (., _, -)
+    const parts = withoutNumbers.split(/[._-]/);
+    // Capitalize each part
+    const capitalizedParts = parts
+      .filter(p => p.length > 0)
+      .map(p => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase());
+    return capitalizedParts.join(' ') || 'Customer';
   };
 
   const handleConfirmOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (tempTable.trim() && user) {
-      setTableInfo(tempTable, tempName);
-      const orderId = await placeOrder();
-      if (orderId) {
-        navigate('/track-order');
+      setOrderLoading(true);
+      try {
+        // Get customer name - Priority:
+        // 1. Google displayName (e.g., "Piyush Thawale" from Google account)
+        // 2. Fallback: Extract from email if displayName not available
+        let finalName = 'Guest';
+        if (user.displayName) {
+          finalName = user.displayName;
+        } else if (user.email) {
+          finalName = getNameFromEmail(user.email);
+        }
+
+        setTableInfo(tempTable, finalName);
+
+        // Pass the table number and name DIRECTLY to placeOrder
+        const orderId = await placeOrder(tempTable, finalName);
+        if (orderId) {
+          navigate('/track-order');
+        }
+      } finally {
+        setOrderLoading(false);
       }
     }
   };
@@ -78,23 +110,23 @@ export const CartPage = () => {
 
       <div className="bg-white rounded-2xl shadow-sm overflow-hidden mb-6">
         {cart.map((item) => (
-          <div key={item.id} className="p-4 border-b border-gray-100 last:border-0 flex gap-4">
-            <img src={item.imageUrl} alt={item.name} className="w-20 h-20 object-cover rounded-lg bg-gray-100" />
+          <div key={item.id} className="p-3 sm:p-4 border-b border-gray-100 last:border-0 flex gap-3 sm:gap-4">
+            <img src={item.imageUrl} alt={item.name} className="w-16 h-16 sm:w-20 sm:h-20 object-cover rounded-lg bg-gray-100" />
 
             <div className="flex-grow flex flex-col justify-between">
               <div className="flex justify-between items-start">
                 <div>
-                  <h3 className="font-bold text-gray-800 font-serif">{item.name}</h3>
-                  <p className="text-sm text-gray-500">{item.category}</p>
+                  <h3 className="font-bold text-gray-800 font-serif text-sm sm:text-base">{item.name}</h3>
+                  <p className="text-xs sm:text-sm text-gray-500">{item.category}</p>
                 </div>
                 <button onClick={() => removeFromCart(item.id)} className="text-gray-400 hover:text-red-500">
-                  <Trash2 size={18} />
+                  <Trash2 size={16} className="sm:w-[18px] sm:h-[18px]" />
                 </button>
               </div>
 
               <div className="flex justify-between items-end">
-                <div className="font-bold text-brand-maroon">
-                  {formatPrice((item.offerPrice || item.price) * item.quantity)}
+                <div className="font-bold text-brand-maroon text-sm sm:text-base">
+                  {formatPrice(item.price * item.quantity)}
                 </div>
 
                 <div className="flex items-center gap-3 bg-brand-offWhite rounded-lg p-1">
@@ -206,29 +238,18 @@ export const CartPage = () => {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-bold text-gray-700 mb-1 ml-1">Your Name</label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <User size={18} className="text-gray-400" />
-                  </div>
-                  <input
-                    type="text"
-                    placeholder="e.g. Rahul"
-                    className="w-full pl-10 pr-4 text-lg border-2 border-gray-200 rounded-xl focus:border-brand-maroon outline-none py-3 bg-gray-50 placeholder:text-gray-400"
-                    value={tempName}
-                    onChange={(e) => setTempName(e.target.value)}
-                    required
-                  />
-                </div>
-              </div>
-
               <button
                 type="submit"
-                disabled={!tempTable || !user || !tempName}
+                disabled={!tempTable || !user || orderLoading}
                 className="w-full bg-brand-maroon text-white font-bold py-3.5 rounded-xl hover:bg-brand-burgundy disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-brand-maroon/20 mt-4 flex items-center justify-center gap-2"
               >
-                {user ? 'Confirm & Place Order' : 'Sign in to place order'} <CheckCircle size={20} />
+                {orderLoading ? (
+                  <><span className="animate-pulse">Sending...</span></>
+                ) : user ? (
+                  <>Confirm & Place Order <CheckCircle size={20} /></>
+                ) : (
+                  'Sign in to place order'
+                )}
               </button>
             </form>
           </div>
