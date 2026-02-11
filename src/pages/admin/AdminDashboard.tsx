@@ -220,10 +220,10 @@ const DashboardOrderCard = ({ order, onUpdateStatus }: { order: Order, onUpdateS
 };
 
 // Detailed Card for Orders View
-const OrderManagementCard = ({ order, onUpdateStatus, onCancelOrder }: { 
-  order: Order, 
+const OrderManagementCard = ({ order, onUpdateStatus, onCancelOrder }: {
+  order: Order,
   onUpdateStatus: any,
-  onCancelOrder: (orderId: string) => void 
+  onCancelOrder: (orderId: string) => void
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [showBillReceipt, setShowBillReceipt] = useState(false);
@@ -253,10 +253,10 @@ const OrderManagementCard = ({ order, onUpdateStatus, onCancelOrder }: {
             {order.status !== 'completed' && order.status !== 'cancelled' && (
               <button
                 onClick={() => onCancelOrder(order.id)}
-                className="ml-auto bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 hover:border-red-300 px-3 py-1.5 rounded-lg font-bold text-xs transition-all flex items-center gap-1.5 shadow-sm hover:shadow"
+                className="ml-auto relative flex items-center justify-center gap-2 m-[5px] px-4 py-2 text-center text-xs font-bold tracking-wider no-underline text-red-500 bg-transparent cursor-pointer transition-all duration-500 ease-out border border-red-500 rounded-lg shadow-[inset_0_0_0_0_#ef4444] hover:text-white hover:shadow-[inset_0_-100px_0_0_#ef4444] active:scale-95"
                 title="Cancel Order (Admin)"
               >
-                <XCircle size={14} />
+                <XCircle size={16} />
                 Cancel
               </button>
             )}
@@ -266,17 +266,6 @@ const OrderManagementCard = ({ order, onUpdateStatus, onCancelOrder }: {
               <span className="text-[10px] font-bold uppercase leading-none">Table</span>
               <span className="text-xl font-bold leading-none">{order.tableNumber}</span>
             </div>
-            {/* Admin Cancel Button - Below Table Number */}
-            {order.status !== 'completed' && order.status !== 'cancelled' && (
-              <button
-                onClick={() => onCancelOrder(order.id)}
-                className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 hover:border-red-300 px-2 py-1 rounded-lg font-bold text-[10px] transition-all flex items-center gap-1 shadow-sm hover:shadow whitespace-nowrap"
-                title="Cancel Order (Admin)"
-              >
-                <XCircle size={10} />
-                Cancel
-              </button>
-            )}
           </div>
         </div>
 
@@ -955,9 +944,9 @@ export const AdminDashboard = () => {
                 ))
               ) : filteredOrders.length > 0 ? (
                 filteredOrders.map(order => (
-                  <OrderManagementCard 
-                    key={order.id} 
-                    order={order} 
+                  <OrderManagementCard
+                    key={order.id}
+                    order={order}
                     onUpdateStatus={updateOrderStatus}
                     onCancelOrder={handleCancelOrder}
                   />
